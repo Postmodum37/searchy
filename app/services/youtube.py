@@ -19,6 +19,10 @@ class YouTubeService:
             "extract_flat": False,
             "skip_download": True,
             "no_check_certificate": True,
+            "age_limit": 21,  # Bypass age restrictions
+            "cookiesfrombrowser": (
+                "chrome",
+            ),  # Try to use Chrome cookies for age-restricted content
         }
 
     async def search(self, query: str, limit: int = 10) -> list[VideoSearchResult]:
@@ -83,8 +87,29 @@ class YouTubeService:
         Returns:
             Extracted information dictionary
         """
+        # Try with default options (including cookies)
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(url, download=False)  # type: ignore[no-any-return]
+        except Exception:
+            pass
+
+        # Fallback: try with different browsers for cookies
+        browsers = ["firefox", "edge", "safari", "opera", "brave"]
+        for browser in browsers:
+            try:
+                fallback_opts = opts.copy()
+                fallback_opts["cookiesfrombrowser"] = (browser,)
+                with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                    return ydl.extract_info(url, download=False)  # type: ignore[no-any-return]
+            except Exception:
+                continue
+
+        # Last fallback: try without cookies
+        try:
+            fallback_opts = opts.copy()
+            fallback_opts.pop("cookiesfrombrowser", None)
+            with yt_dlp.YoutubeDL(fallback_opts) as ydl:
                 return ydl.extract_info(url, download=False)  # type: ignore[no-any-return]
         except Exception:
             return None

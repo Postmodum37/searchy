@@ -7,6 +7,7 @@ Efficient YouTube search API service without API key requirements. Built with Fa
 - 🔍 **Search YouTube** - Search for videos without API keys
 - 📊 **Detailed Metadata** - Get comprehensive video information including formats, audio options, and more
 - 🎵 **Music-Optimized** - Extracts audio-only formats perfect for music applications
+- 🔒 **Age-Restriction Bypass** - Automatically handles age-restricted content using browser cookies
 - ⚡ **Fast & Efficient** - Built with FastAPI and async support
 - 💾 **Smart Caching** - In-memory caching to reduce redundant requests
 - 🐳 **Docker Ready** - Multi-stage Docker builds for production deployment
@@ -245,6 +246,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 ```
+
+### Age-Restricted Content
+
+The service automatically handles age-restricted videos by extracting cookies from installed browsers. It tries browsers in this order:
+
+1. Chrome (default)
+2. Firefox
+3. Edge
+4. Safari
+5. Opera
+6. Brave
+
+**Requirements:** You must be logged into YouTube in at least one of these browsers for age-restricted content to work.
+
+If no browser cookies are available, the service will still work but may skip age-restricted videos.
 
 ## Production Deployment
 
