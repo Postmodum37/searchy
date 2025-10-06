@@ -17,7 +17,7 @@ Efficient YouTube search API service without API key requirements. Built with Fa
 
 ## Tech Stack
 
-- **Python 3.11+**
+- **Python 3.13+**
 - **FastAPI** - Modern web framework
 - **yt-dlp** - YouTube data extraction
 - **uvicorn** - ASGI server

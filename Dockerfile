@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Searchy API
 
 # Stage 1: Base image with uv
-FROM python:3.11-slim AS base
+FROM python:3.13-slim AS base
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -29,7 +29,7 @@ FROM base AS runtime
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 
 # Copy application code
 COPY app /app/app

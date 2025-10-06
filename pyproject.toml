@@ -6,12 +6,12 @@ readme = "README.md"
 authors = [
     { name = "Tomas Novikovas", email = "tomasn@wix.com" }
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
-    "yt-dlp>=2024.12.23",
-    "pydantic>=2.10.0",
+    "fastapi>=0.118.0",
+    "uvicorn[standard]>=0.37.0",
+    "yt-dlp>=2025.9.26",
+    "pydantic>=2.11.0",
     "pydantic-settings>=2.6.0",
     "httpx>=0.28.0",
 ]
@@ -45,7 +45,7 @@ dev-dependencies = [
 # Ruff configuration
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 exclude = [
     ".git",
     ".venv",
@@ -91,7 +91,7 @@ docstring-code-format = true
 
 # Mypy configuration
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 strict = true
 warn_return_any = true
 warn_unused_configs = true

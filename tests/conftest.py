@@ -9,7 +9,7 @@ from app.main import app
 
 
 @pytest.fixture
-async def async_client() -> AsyncGenerator[AsyncClient, None]:
+async def async_client() -> AsyncGenerator[AsyncClient]:
     """
     Fixture providing an async HTTP client for testing.
 
