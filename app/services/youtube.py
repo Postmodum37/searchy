@@ -1,11 +1,25 @@
 """YouTube service for interacting with yt-dlp."""
 
 import asyncio
+import contextlib
+import io
+import sys
 from typing import Any
 
 import yt_dlp
 
 from app.models import VideoDetail, VideoFormat, VideoSearchResult
+
+
+@contextlib.contextmanager
+def suppress_stderr() -> Any:
+    """Context manager to suppress stderr output."""
+    old_stderr = sys.stderr
+    sys.stderr = io.StringIO()
+    try:
+        yield
+    finally:
+        sys.stderr = old_stderr
 
 
 class YouTubeService:
@@ -23,6 +37,16 @@ class YouTubeService:
             "cookiesfrombrowser": (
                 "chrome",
             ),  # Try to use Chrome cookies for age-restricted content
+            "ignoreerrors": True,  # Continue on download errors
+            "no_color": True,  # Disable color in output
+        }
+
+        # Separate options for search (lighter extraction)
+        self.search_opts = {
+            **self.default_opts,
+            "extract_flat": "in_playlist",  # Don't extract full details during search
+            "quiet": True,
+            "no_warnings": True,
         }
 
     async def search(self, query: str, limit: int = 10) -> list[VideoSearchResult]:
@@ -39,9 +63,10 @@ class YouTubeService:
         search_query = f"ytsearch{limit}:{query}"
 
         # Run yt-dlp in a thread pool to avoid blocking
+        # Use search_opts for lighter extraction during search
         loop = asyncio.get_event_loop()
         results = await loop.run_in_executor(
-            None, self._extract_info, search_query, self.default_opts
+            None, self._extract_info, search_query, self.search_opts
         )
 
         if not results:
@@ -50,7 +75,17 @@ class YouTubeService:
         # Extract entries from search results
         entries = results.get("entries", [])
 
-        return [self._parse_search_result(entry) for entry in entries if entry]
+        # Filter out None entries and parse valid ones
+        valid_results = []
+        for entry in entries:
+            if entry and isinstance(entry, dict) and entry.get("id"):
+                try:
+                    valid_results.append(self._parse_search_result(entry))
+                except Exception:
+                    # Skip entries that fail to parse
+                    continue
+
+        return valid_results
 
     async def get_video_details(self, video_id: str) -> VideoDetail | None:
         """
@@ -88,31 +123,32 @@ class YouTubeService:
             Extracted information dictionary
         """
         # Try with default options (including cookies)
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(url, download=False)  # type: ignore[no-any-return]
-        except Exception:
-            pass
+        with suppress_stderr():
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    return ydl.extract_info(url, download=False)  # type: ignore[no-any-return]
+            except Exception:
+                pass
 
-        # Fallback: try with different browsers for cookies
-        browsers = ["firefox", "edge", "safari", "opera", "brave"]
-        for browser in browsers:
+            # Fallback: try with different browsers for cookies
+            browsers = ["firefox", "edge", "safari", "opera", "brave"]
+            for browser in browsers:
+                try:
+                    fallback_opts = opts.copy()
+                    fallback_opts["cookiesfrombrowser"] = (browser,)
+                    with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                        return ydl.extract_info(url, download=False)  # type: ignore[no-any-return]
+                except Exception:
+                    continue
+
+            # Last fallback: try without cookies
             try:
                 fallback_opts = opts.copy()
-                fallback_opts["cookiesfrombrowser"] = (browser,)
+                fallback_opts.pop("cookiesfrombrowser", None)
                 with yt_dlp.YoutubeDL(fallback_opts) as ydl:
                     return ydl.extract_info(url, download=False)  # type: ignore[no-any-return]
             except Exception:
-                continue
-
-        # Last fallback: try without cookies
-        try:
-            fallback_opts = opts.copy()
-            fallback_opts.pop("cookiesfrombrowser", None)
-            with yt_dlp.YoutubeDL(fallback_opts) as ydl:
-                return ydl.extract_info(url, download=False)  # type: ignore[no-any-return]
-        except Exception:
-            return None
+                return None
 
     def _parse_search_result(self, entry: dict[str, Any]) -> VideoSearchResult:
         """
