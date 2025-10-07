@@ -4,15 +4,17 @@ import asyncio
 import contextlib
 import io
 import sys
+from collections.abc import Generator
 from typing import Any
 
 import yt_dlp
 
+from app.config import settings
 from app.models import VideoDetail, VideoFormat, VideoSearchResult
 
 
 @contextlib.contextmanager
-def suppress_stderr() -> Any:
+def suppress_stderr() -> Generator[None]:
     """Context manager to suppress stderr output."""
     old_stderr = sys.stderr
     sys.stderr = io.StringIO()
@@ -33,10 +35,8 @@ class YouTubeService:
             "extract_flat": False,
             "skip_download": True,
             "no_check_certificate": True,
-            "age_limit": 21,  # Bypass age restrictions
-            "cookiesfrombrowser": (
-                "chrome",
-            ),  # Try to use Chrome cookies for age-restricted content
+            "age_limit": settings.youtube_age_limit,
+            "cookiesfrombrowser": (settings.youtube_default_browser,),
             "ignoreerrors": True,  # Continue on download errors
             "no_color": True,  # Disable color in output
         }
@@ -45,8 +45,6 @@ class YouTubeService:
         self.search_opts = {
             **self.default_opts,
             "extract_flat": "in_playlist",  # Don't extract full details during search
-            "quiet": True,
-            "no_warnings": True,
         }
 
     async def search(self, query: str, limit: int = 10) -> list[VideoSearchResult]:
@@ -64,10 +62,7 @@ class YouTubeService:
 
         # Run yt-dlp in a thread pool to avoid blocking
         # Use search_opts for lighter extraction during search
-        loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(
-            None, self._extract_info, search_query, self.search_opts
-        )
+        results = await asyncio.to_thread(self._extract_info, search_query, self.search_opts)
 
         if not results:
             return []
@@ -100,11 +95,8 @@ class YouTubeService:
         video_url = f"https://www.youtube.com/watch?v={video_id}"
 
         # Run yt-dlp in a thread pool to avoid blocking
-        loop = asyncio.get_event_loop()
         try:
-            info = await loop.run_in_executor(
-                None, self._extract_info, video_url, self.default_opts
-            )
+            info = await asyncio.to_thread(self._extract_info, video_url, self.default_opts)
             if not info:
                 return None
             return self._parse_video_detail(info)
@@ -131,8 +123,7 @@ class YouTubeService:
                 pass
 
             # Fallback: try with different browsers for cookies
-            browsers = ["firefox", "edge", "safari", "opera", "brave"]
-            for browser in browsers:
+            for browser in settings.youtube_fallback_browsers:
                 try:
                     fallback_opts = opts.copy()
                     fallback_opts["cookiesfrombrowser"] = (browser,)
@@ -150,6 +141,18 @@ class YouTubeService:
             except Exception:
                 return None
 
+    def _build_video_url(self, entry: dict[str, Any]) -> str:
+        """
+        Build YouTube video URL from entry data.
+
+        Args:
+            entry: Raw entry from yt-dlp
+
+        Returns:
+            YouTube video URL
+        """
+        return entry.get("webpage_url") or f"https://www.youtube.com/watch?v={entry.get('id')}"
+
     def _parse_search_result(self, entry: dict[str, Any]) -> VideoSearchResult:
         """
         Parse a search result entry into a VideoSearchResult model.
@@ -163,7 +166,7 @@ class YouTubeService:
         return VideoSearchResult(
             video_id=entry.get("id", ""),
             title=entry.get("title", ""),
-            url=entry.get("webpage_url", f"https://www.youtube.com/watch?v={entry.get('id')}"),
+            url=self._build_video_url(entry),
             duration=entry.get("duration"),
             view_count=entry.get("view_count"),
             like_count=entry.get("like_count"),
@@ -216,7 +219,7 @@ class YouTubeService:
         return VideoDetail(
             video_id=info.get("id", ""),
             title=info.get("title", ""),
-            url=info.get("webpage_url", f"https://www.youtube.com/watch?v={info.get('id')}"),
+            url=self._build_video_url(info),
             duration=info.get("duration"),
             view_count=info.get("view_count"),
             like_count=info.get("like_count"),

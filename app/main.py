@@ -1,6 +1,7 @@
 """Main FastAPI application for YouTube search service."""
 
 import hashlib
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -8,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.config import settings
 from app.models import (
     ErrorResponse,
     HealthResponse,
@@ -15,10 +17,17 @@ from app.models import (
     VideoSearchResponse,
 )
 from app.services.youtube import YouTubeService
-from app.utils.cache import get_cache
+from app.utils.cache import get_cache, get_or_compute
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, settings.log_level),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 # Version
-VERSION = "0.1.0"
+VERSION = settings.api_version
 
 
 @asynccontextmanager
@@ -30,16 +39,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app: FastAPI application instance
     """
     # Startup
-    print(f"Starting Searchy API v{VERSION}")
+    logger.info(f"Starting Searchy API v{VERSION}")
     yield
     # Shutdown
-    print("Shutting down Searchy API")
+    logger.info("Shutting down Searchy API")
 
 
 # Create FastAPI app
 app = FastAPI(
-    title="Searchy",
-    description="Efficient YouTube search API service without API key requirements",
+    title=settings.api_title,
+    description=settings.api_description,
     version=VERSION,
     lifespan=lifespan,
     docs_url="/docs",
@@ -49,7 +58,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,7 +94,12 @@ async def health_check() -> HealthResponse:
 @app.get("/search", response_model=VideoSearchResponse)
 async def search_videos(
     q: str = Query(..., description="Search query", min_length=1),
-    limit: int = Query(10, description="Maximum number of results", ge=1, le=50),
+    limit: int = Query(
+        settings.default_search_limit,
+        description="Maximum number of results",
+        ge=1,
+        le=settings.max_search_results,
+    ),
     no_cache: bool = Query(False, description="Skip cache and force fresh results"),
 ) -> VideoSearchResponse:
     """
@@ -106,22 +120,18 @@ async def search_videos(
         # Generate cache key
         cache_key = f"search:{hashlib.md5(f'{q}:{limit}'.encode()).hexdigest()}"
 
-        # Try to get from cache
-        if not no_cache:
-            cached_result = await cache.get(cache_key)
-            if cached_result:
-                return cached_result  # type: ignore[no-any-return]
+        # Define computation function
+        async def compute_search() -> VideoSearchResponse:
+            results = await youtube_service.search(q, limit)
+            return VideoSearchResponse(query=q, results=results, count=len(results))
 
-        # Perform search
-        results = await youtube_service.search(q, limit)
-
-        # Create response
-        response = VideoSearchResponse(query=q, results=results, count=len(results))
-
-        # Cache the results
-        await cache.set(cache_key, response, ttl=300)  # 5 minutes
-
-        return response
+        # Get from cache or compute
+        return await get_or_compute(
+            cache_key=cache_key,
+            compute_fn=compute_search,
+            ttl=settings.cache_ttl_search,
+            no_cache=no_cache,
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}") from e
@@ -149,22 +159,20 @@ async def get_video(
         # Generate cache key
         cache_key = f"video:{video_id}"
 
-        # Try to get from cache
-        if not no_cache:
-            cached_result = await cache.get(cache_key)
-            if cached_result:
-                return cached_result  # type: ignore[no-any-return]
+        # Define computation function
+        async def compute_video() -> VideoDetail:
+            video = await youtube_service.get_video_details(video_id)
+            if not video:
+                raise HTTPException(status_code=404, detail=f"Video {video_id} not found")
+            return video
 
-        # Get video details
-        video = await youtube_service.get_video_details(video_id)
-
-        if not video:
-            raise HTTPException(status_code=404, detail=f"Video {video_id} not found")
-
-        # Cache the results
-        await cache.set(cache_key, video, ttl=600)  # 10 minutes
-
-        return video
+        # Get from cache or compute
+        return await get_or_compute(
+            cache_key=cache_key,
+            compute_fn=compute_video,
+            ttl=settings.cache_ttl_video,
+            no_cache=no_cache,
+        )
 
     except HTTPException:
         raise

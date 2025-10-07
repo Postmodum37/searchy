@@ -30,5 +30,6 @@ repos:
       - id: mypy
         additional_dependencies:
           - pydantic>=2.10.0
+          - pydantic-settings>=2.6.0
           - types-aiofiles
         args: [--strict, --ignore-missing-imports]

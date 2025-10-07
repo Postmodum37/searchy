@@ -1,6 +1,6 @@
 """Pydantic models for API request and response validation."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
@@ -43,7 +43,9 @@ class VideoSearchResponse(BaseModel):
     query: str = Field(..., description="Search query")
     results: list[VideoSearchResult] = Field(..., description="Search results")
     count: int = Field(..., description="Number of results returned")
-    timestamp: datetime = Field(default_factory=datetime.now, description="Response timestamp")
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="Response timestamp"
+    )
 
 
 class VideoDetail(BaseModel):
@@ -75,7 +77,9 @@ class HealthResponse(BaseModel):
 
     status: str = Field(..., description="Service status")
     version: str = Field(..., description="API version")
-    timestamp: datetime = Field(default_factory=datetime.now, description="Health check timestamp")
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="Health check timestamp"
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -83,4 +87,6 @@ class ErrorResponse(BaseModel):
 
     error: str = Field(..., description="Error message")
     detail: str | None = Field(None, description="Detailed error information")
-    timestamp: datetime = Field(default_factory=datetime.now, description="Error timestamp")
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="Error timestamp"
+    )

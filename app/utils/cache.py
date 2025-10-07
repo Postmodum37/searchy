@@ -1,8 +1,14 @@
 """Simple in-memory cache utility for API responses."""
 
 import asyncio
+import hashlib
 import time
-from typing import Any
+from collections.abc import Awaitable, Callable
+from functools import wraps
+from typing import Any, ParamSpec, TypeVar
+
+P = ParamSpec("P")
+T = TypeVar("T")
 
 
 class SimpleCache:
@@ -109,3 +115,108 @@ def get_cache() -> SimpleCache:
         Global SimpleCache instance
     """
     return _cache
+
+
+def cached(
+    cache_key_fn: Callable[..., str], ttl: int, cache_instance: SimpleCache | None = None
+) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
+    """
+    Decorator to cache async function results.
+
+    Args:
+        cache_key_fn: Function to generate cache key from function arguments
+        ttl: Time-to-live in seconds
+        cache_instance: Cache instance to use (uses global cache if None)
+
+    Returns:
+        Decorated function with caching
+    """
+    cache = cache_instance or _cache
+
+    def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
+        @wraps(func)
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+            # Check if cache should be bypassed
+            no_cache = kwargs.get("no_cache", False)
+
+            if not no_cache:
+                # Generate cache key
+                key = cache_key_fn(*args, **kwargs)
+                # Try to get from cache
+                cached_result = await cache.get(key)
+                if cached_result is not None:
+                    return cached_result  # type: ignore[no-any-return]
+
+            # Call the original function
+            result = await func(*args, **kwargs)
+
+            # Cache the result
+            key = cache_key_fn(*args, **kwargs)
+            await cache.set(key, result, ttl=ttl)
+
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+def generate_cache_key(prefix: str, *args: Any, **kwargs: Any) -> str:
+    """
+    Generate a cache key from prefix and arguments.
+
+    Args:
+        prefix: Cache key prefix
+        *args: Positional arguments to include in key
+        **kwargs: Keyword arguments to include in key (no_cache is excluded)
+
+    Returns:
+        MD5 hash-based cache key
+    """
+    # Exclude no_cache from key generation
+    filtered_kwargs = {k: v for k, v in kwargs.items() if k != "no_cache"}
+
+    # Create string representation
+    key_parts = [prefix]
+    key_parts.extend(str(arg) for arg in args)
+    key_parts.extend(f"{k}:{v}" for k, v in sorted(filtered_kwargs.items()))
+
+    key_string = ":".join(key_parts)
+    return f"{prefix}:{hashlib.md5(key_string.encode()).hexdigest()}"
+
+
+async def get_or_compute[T](
+    cache_key: str,
+    compute_fn: Callable[[], Awaitable[T]],
+    ttl: int,
+    no_cache: bool = False,
+    cache_instance: SimpleCache | None = None,
+) -> T:
+    """
+    Get value from cache or compute it if not cached.
+
+    Args:
+        cache_key: Cache key to use
+        compute_fn: Async function to compute the value if not cached
+        ttl: Time-to-live in seconds for cached result
+        no_cache: Skip cache and force fresh computation
+        cache_instance: Cache instance to use (uses global cache if None)
+
+    Returns:
+        Cached or computed value
+    """
+    cache = cache_instance or _cache
+
+    # Try to get from cache if caching is enabled
+    if not no_cache:
+        cached_result = await cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result  # type: ignore[no-any-return]
+
+    # Compute the value
+    result = await compute_fn()
+
+    # Cache the result
+    await cache.set(cache_key, result, ttl=ttl)
+
+    return result
