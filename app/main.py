@@ -254,7 +254,7 @@ async def cache_stats() -> dict[str, int]:
 
 # Exception handler for custom error responses
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request: object, exc: HTTPException) -> JSONResponse:
+async def http_exception_handler(_request: object, exc: HTTPException) -> JSONResponse:
     """
     Custom HTTP exception handler.
 
@@ -270,7 +270,7 @@ async def http_exception_handler(request: object, exc: HTTPException) -> JSONRes
 
 
 @app.exception_handler(Exception)
-async def general_exception_handler(request: object, exc: Exception) -> JSONResponse:
+async def general_exception_handler(_request: object, exc: Exception) -> JSONResponse:
     """
     General exception handler for unexpected errors.
 
