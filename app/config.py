@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # Cache TTL (seconds)
     cache_ttl_search: int = 300  # 5 minutes
     cache_ttl_video: int = 600  # 10 minutes
+    cache_ttl_audio: int = 60  # 1 minute (URLs expire quickly)
     cache_default_ttl: int = 300
 
     # CORS

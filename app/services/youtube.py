@@ -10,7 +10,13 @@ from typing import Any
 import yt_dlp
 
 from app.config import settings
-from app.models import VideoDetail, VideoFormat, VideoSearchResult
+from app.models import (
+    AudioFormatInfo,
+    AudioStreamResponse,
+    VideoDetail,
+    VideoFormat,
+    VideoSearchResult,
+)
 
 
 @contextlib.contextmanager
@@ -100,6 +106,27 @@ class YouTubeService:
             if not info:
                 return None
             return self._parse_video_detail(info)
+        except Exception:
+            return None
+
+    async def get_audio_stream_url(self, video_id: str) -> AudioStreamResponse | None:
+        """
+        Get direct audio stream URL for music playback.
+
+        Args:
+            video_id: YouTube video ID
+
+        Returns:
+            AudioStreamResponse with direct audio URL and metadata, or None if not found
+        """
+        video_url = f"https://www.youtube.com/watch?v={video_id}"
+
+        # Run yt-dlp in a thread pool to avoid blocking
+        try:
+            info = await asyncio.to_thread(self._extract_info, video_url, self.default_opts)
+            if not info:
+                return None
+            return self._parse_audio_stream(info)
         except Exception:
             return None
 
@@ -234,4 +261,61 @@ class YouTubeService:
             formats=formats if formats else None,
             audio_only_formats=audio_only_formats if audio_only_formats else None,
             best_audio_format=best_audio,
+        )
+
+    def _parse_audio_stream(self, info: dict[str, Any]) -> AudioStreamResponse:
+        """
+        Parse video info and extract the best audio stream URL.
+
+        Args:
+            info: Raw info from yt-dlp
+
+        Returns:
+            AudioStreamResponse with direct audio URL and metadata
+        """
+        # Find audio-only formats
+        audio_formats = [
+            fmt
+            for fmt in info.get("formats", [])
+            if fmt.get("vcodec") == "none" and fmt.get("acodec") != "none" and fmt.get("url")
+        ]
+
+        # Find best audio format (highest bitrate)
+        if not audio_formats:
+            # Fallback: use any format with audio
+            audio_formats = [
+                fmt
+                for fmt in info.get("formats", [])
+                if fmt.get("acodec") != "none" and fmt.get("url")
+            ]
+
+        if not audio_formats:
+            raise ValueError("No audio format found for this video")
+
+        # Get best audio format by bitrate
+        best_format = max(audio_formats, key=lambda f: f.get("abr") or f.get("tbr") or 0)
+
+        # Create AudioFormatInfo
+        audio_format = AudioFormatInfo(
+            format_id=best_format.get("format_id", ""),
+            url=best_format.get("url", ""),
+            ext=best_format.get("ext", ""),
+            acodec=best_format.get("acodec"),
+            abr=best_format.get("abr") or best_format.get("tbr"),
+            filesize=best_format.get("filesize") or best_format.get("filesize_approx"),
+            quality=best_format.get("format_note"),
+        )
+
+        # YouTube URLs typically expire in ~6 hours
+        url_expires_in = 21600  # 6 hours in seconds
+
+        return AudioStreamResponse(
+            video_id=info.get("id", ""),
+            title=info.get("title", ""),
+            url=self._build_video_url(info),
+            duration=info.get("duration"),
+            channel=info.get("uploader") or info.get("channel"),
+            thumbnail=info.get("thumbnail"),
+            audio_format=audio_format,
+            url_expires_in=url_expires_in,
         )

@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.models import (
+    AudioStreamResponse,
     ErrorResponse,
     HealthResponse,
     VideoDetail,
@@ -40,6 +41,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     # Startup
     logger.info(f"Starting Searchy API v{VERSION}")
+    logger.info("📚 API Documentation: http://127.0.0.1:8000/docs")
+    logger.info("📖 ReDoc Documentation: http://127.0.0.1:8000/redoc")
     yield
     # Shutdown
     logger.info("Shutting down Searchy API")
@@ -178,6 +181,52 @@ async def get_video(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get video: {str(e)}") from e
+
+
+@app.get("/audio/{video_id}", response_model=AudioStreamResponse)
+async def get_audio_stream(
+    video_id: str,
+    no_cache: bool = Query(False, description="Skip cache and force fresh results"),
+) -> AudioStreamResponse:
+    """
+    Get direct audio stream URL for music playback.
+
+    This endpoint returns the best audio-only format URL suitable for streaming
+    music in Discord bots or other music applications.
+
+    Args:
+        video_id: YouTube video ID
+        no_cache: Skip cache and force fresh results (default: False)
+
+    Returns:
+        AudioStreamResponse with direct audio URL, format details, and metadata
+
+    Raises:
+        HTTPException: If video not found or audio extraction fails
+    """
+    try:
+        # Generate cache key
+        cache_key = f"audio:{video_id}"
+
+        # Define computation function
+        async def compute_audio() -> AudioStreamResponse:
+            audio = await youtube_service.get_audio_stream_url(video_id)
+            if not audio:
+                raise HTTPException(status_code=404, detail=f"Video {video_id} not found")
+            return audio
+
+        # Get from cache or compute (shorter TTL for audio URLs as they expire)
+        return await get_or_compute(
+            cache_key=cache_key,
+            compute_fn=compute_audio,
+            ttl=settings.cache_ttl_audio,
+            no_cache=no_cache,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get audio stream: {str(e)}") from e
 
 
 @app.delete("/cache")

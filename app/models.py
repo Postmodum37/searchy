@@ -90,3 +90,33 @@ class ErrorResponse(BaseModel):
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="Error timestamp"
     )
+
+
+class AudioFormatInfo(BaseModel):
+    """Model representing audio format information for streaming."""
+
+    format_id: str = Field(..., description="Format identifier")
+    url: str = Field(..., description="Direct URL to audio stream")
+    ext: str = Field(..., description="File extension (e.g., m4a, webm)")
+    acodec: str | None = Field(None, description="Audio codec (e.g., mp4a.40.2, opus)")
+    abr: float | None = Field(None, description="Audio bitrate in kbps")
+    filesize: int | None = Field(None, description="Approximate file size in bytes")
+    quality: str | None = Field(None, description="Quality label")
+
+
+class AudioStreamResponse(BaseModel):
+    """Model representing audio stream information for music playback."""
+
+    video_id: str = Field(..., description="YouTube video ID")
+    title: str = Field(..., description="Video title")
+    url: str = Field(..., description="Video URL")
+    duration: int | None = Field(None, description="Duration in seconds")
+    channel: str | None = Field(None, description="Channel name")
+    thumbnail: str | None = Field(None, description="Thumbnail URL")
+    audio_format: AudioFormatInfo = Field(..., description="Best audio format for streaming")
+    url_expires_in: int | None = Field(
+        None, description="Approximate time until URL expires (seconds)"
+    )
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="Response timestamp"
+    )

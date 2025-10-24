@@ -136,6 +136,49 @@ curl "http://localhost:8000/video/dQw4w9WgXcQ"
 }
 ```
 
+### Get Audio Stream (New!)
+
+```bash
+GET /audio/{video_id}
+```
+
+**Parameters:**
+- `video_id` (required): YouTube video ID
+- `no_cache` (optional): Skip cache and force fresh results (default: false)
+
+**Description:**
+Returns direct audio stream URL optimized for music playback. Perfect for Discord bots and music applications. URLs typically expire in ~6 hours.
+
+**Example:**
+```bash
+curl "http://localhost:8000/audio/dQw4w9WgXcQ"
+```
+
+**Response:**
+```json
+{
+  "video_id": "dQw4w9WgXcQ",
+  "title": "Rick Astley - Never Gonna Give You Up",
+  "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "duration": 213,
+  "channel": "Rick Astley",
+  "thumbnail": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+  "audio_format": {
+    "format_id": "140",
+    "url": "https://rr2---sn-uxv-8ovl.googlevideo.com/videoplayback?...",
+    "ext": "m4a",
+    "acodec": "mp4a.40.2",
+    "abr": 128.0,
+    "filesize": 3452345,
+    "quality": "medium"
+  },
+  "url_expires_in": 21600,
+  "timestamp": "2025-01-17T12:00:00Z"
+}
+```
+
+**Note:** The `audio_format.url` is a direct link to the audio stream that can be used immediately for playback. Cache TTL is 60 seconds due to URL expiration.
+
 ### Health Check
 
 ```bash
