@@ -17,10 +17,11 @@ WORKDIR /app
 FROM base AS builder
 
 # Copy dependency files
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
+COPY app ./app
 
 # Install dependencies
-RUN uv pip install --system -e .
+RUN uv pip install --system .
 
 # Stage 3: Runtime stage
 FROM base AS runtime
