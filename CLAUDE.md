@@ -72,14 +72,14 @@ uv run pre-commit run --all-files
 
 ### Core Components
 
-**YouTubeService** (`app/services/youtube.py:27-316`)
+**YouTubeService** (`app/services/youtube.py:33-322`)
 - Wraps yt-dlp with async execution using `asyncio.to_thread`
 - Implements multi-browser cookie fallback for age-restricted content
 - Tries browsers in order: chrome → firefox → edge → safari → opera → brave
 - Falls back to no-cookie mode if all browser attempts fail
 - Suppresses stderr to avoid console pollution from yt-dlp
 
-**Caching Strategy** (`app/utils/cache.py:14-104`)
+**Caching Strategy** (`app/utils/cache.py:14-103`)
 - In-memory cache with async locks for thread safety
 - Different TTLs per endpoint type (configurable via `app/config.py`):
   - Search results: 5 minutes (frequently changing)
@@ -88,7 +88,7 @@ uv run pre-commit run --all-files
 - Helper function `get_or_compute()` implements cache-aside pattern
 - All endpoints support `no_cache` query parameter to bypass cache
 
-**Configuration** (`app/config.py:6-43`)
+**Configuration** (`app/config.py:6-44`)
 - Uses pydantic-settings with environment variable support
 - Prefix: `SEARCHY_` (e.g., `SEARCHY_LOG_LEVEL=DEBUG`)
 - All settings have sensible defaults
@@ -108,7 +108,7 @@ Management endpoints:
 
 ### Error Handling
 
-Custom exception handlers in `app/main.py:258-287`:
+Custom exception handlers in `app/main.py:255-285`:
 - `HTTPException` → Structured JSON error response
 - Generic `Exception` → 500 error with safe message
 - All errors include timestamp via `ErrorResponse` model
@@ -120,7 +120,7 @@ The service handles age-restricted videos by extracting cookies from installed b
 - Fallback browsers: firefox, edge, safari, opera, brave
 - Requires user to be logged into YouTube in at least one browser
 
-Browser cookie extraction happens in `YouTubeService._extract_info()` (app/services/youtube.py:127-163) with automatic fallback chain.
+Browser cookie extraction happens in `YouTubeService._extract_info()` (`app/services/youtube.py:133-169`) with automatic fallback chain.
 
 ## Development Patterns
 
@@ -150,19 +150,19 @@ Browser cookie extraction happens in `YouTubeService._extract_info()` (app/servi
 
 ## Key Implementation Details
 
-**Search Implementation** (`app/services/youtube.py:50-83`)
+**Search Implementation** (`app/services/youtube.py:56-89`)
 - Uses yt-dlp search syntax: `ytsearch{limit}:{query}`
 - Filters out None/invalid entries from results
 - Uses lighter extraction mode (`extract_flat: "in_playlist"`) for performance
 - Error handling: skips videos that fail to parse rather than failing entire request
 
-**Audio Stream Extraction** (`app/services/youtube.py:260-315`)
+**Audio Stream Extraction** (`app/services/youtube.py:266-321`)
 - Selects best audio-only format by bitrate
 - Falls back to any format with audio if pure audio-only not available
 - Returns direct stream URL (expires in ~6 hours per YouTube)
 - Optimized for Discord bots and music applications
 
-**Format Selection** (`app/services/youtube.py:270-290`)
+**Format Selection** (`app/services/youtube.py:276-296`)
 - Audio-only: `vcodec == "none" and acodec != "none"`
 - Best quality: highest `abr` (audio bitrate) or `tbr` (total bitrate)
 
